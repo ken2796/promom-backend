@@ -9,6 +9,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.NameSparkService = void 0;
 const common_1 = require("@nestjs/common");
 const name_seed_1 = require("./data/name-seed");
+const name_gender_enum_1 = require("../shared/enums/name-gender.enum");
+const POPULARITY_BONUS = {
+    Popular: 2,
+    Steady: 1,
+    Emerging: 0,
+};
 function cloneSeedNames() {
     return name_seed_1.nameSeed.map((item) => ({
         ...item,
@@ -20,18 +26,43 @@ let NameSparkService = class NameSparkService {
         this.names = cloneSeedNames();
     }
     search(input) {
-        void input;
-        throw new common_1.NotImplementedException('TODO: implement NameSpark search for the assignment.');
+        const { gender, origins, startingLetter, limit = 10 } = input;
+        const filtered = this.names.filter((name) => {
+            if (gender && name.gender !== gender && name.gender !== name_gender_enum_1.NameGender.Unisex) {
+                return false;
+            }
+            if (origins && origins.length > 0 && !origins.includes(name.origin)) {
+                return false;
+            }
+            if (startingLetter && !name.name.startsWith(startingLetter)) {
+                return false;
+            }
+            return true;
+        });
+        const scored = filtered.map((name) => {
+            let score = 0;
+            if (gender) {
+                score += name.gender === gender ? 3 : 1;
+            }
+            if (origins && origins.length > 0) {
+                score += 2;
+            }
+            if (startingLetter) {
+                score += 2;
+            }
+            score += POPULARITY_BONUS[name.popularity] ?? 0;
+            return this.toSearchResult(name, score);
+        });
+        scored.sort((a, b) => b.matchScore - a.matchScore || a.name.localeCompare(b.name));
+        return scored.slice(0, limit);
     }
     getNameDetail(id) {
-        const name = this.findNameOrThrow(id);
-        throw new common_1.NotImplementedException(`TODO: implement NameSpark detail retrieval for ${name.id}.`);
+        return this.toDetail(this.findNameOrThrow(id));
     }
     updateFavorite(id, input) {
         const name = this.findNameOrThrow(id);
-        void input;
-        void name;
-        throw new common_1.NotImplementedException('TODO: implement NameSpark favorite mutation for the assignment.');
+        name.isFavorite = input.isFavorite;
+        return this.toDetail(name);
     }
     findNameOrThrow(id) {
         const name = this.names.find((entry) => entry.id === id);
